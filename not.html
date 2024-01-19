@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Note and Task Manager</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #add8e6; /* Açık mavi tonu */
+        }
+        #container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+        }
+        .section {
+            width: 40%;
+            margin: 10px;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            color: #495057;
+        }
+        input, button, label, select {
+            margin-top: 10px;
+            padding: 8px;
+            font-size: 14px;
+            display: block;
+        }
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            padding: 10px 0;
+        }
+        .item.completed {
+            text-decoration: line-through; /* Tamamlanan görevin üstünü çiz */
+        }
+        .delete-btn {
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .warning {
+            color: #dc3545;
+            margin-top: 5px;
+            font-size: 12px;
+        }
+        .symbol {
+            margin-right: 5px;
+            font-size: 18px;
+        }
+        .date-time {
+            color: black; /* Tarih ve saat rengi */
+        }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <div class="section">
+        <h2>My Smart Notes</h2>
+        <input type="text" id="newNote" placeholder="Add a new note" onkeyup="checkKey(event)">
+        <label for="noteColor">Text Color:</label>
+        <input type="color" id="noteColor" value="#000000">
+        <button onclick="addNote()">Add Note</button>
+        <ul id="noteList"></ul>
+    </div>
+
+    <div class="section">
+        <h2>Task Manager</h2>
+        <label for="taskName">Task:</label>
+        <input type="text" id="taskName" placeholder="Task name">
+        <label for="taskDate">Date:</label>
+        <input type="date" id="taskDate">
+        <label for="taskTime">Time:</label>
+        <input type="time" id="taskTime">
+        <label for="taskColor">Text Color:</label>
+        <input type="color" id="taskColor" value="#000000">
+        <button onclick="addTask()">Add Task</button>
+        <div id="warningTaskDate" class="warning"></div>
+        <ul id="taskList"></ul>
+    </div>
+</div>
+
+<script>
+    // Verileri localStorage'dan al
+    var savedNotes = JSON.parse(localStorage.getItem('notes')) || [];
+    var savedTasks = JSON.parse(localStorage.getItem('tasks')) || [];
+
+    // Sayfa yüklendiğinde notları ve görevleri göster
+    window.onload = function () {
+        displayNotes();
+        displayTasks();
+        
+        // Zamanı her saniye kontrol et ve görevleri güncelle
+        setInterval(updateRemainingTime, 1000);
+    };
+
+    function addNote() {
+        var newNoteText = document.getElementById('newNote').value.trim();
+        if (newNoteText === '') {
+            alert('Please enter a note.');
+            return;
+        }
+
+        var textColor = document.getElementById('noteColor').value;
+        var currentDate = new Date().toLocaleDateString();
+        var newNote = {
+            text: newNoteText,
+            color: textColor,
+            date: currentDate
+        };
+
+        savedNotes.push(newNote);
+        localStorage.setItem('notes', JSON.stringify(savedNotes));
+
+        displayNotes();
+
+        document.getElementById('newNote').value = '';
+    }
+
+    function addTask() {
+        var taskName = document.getElementById('taskName').value.trim();
+        var taskDate = document.getElementById('taskDate').value;
+        var taskTime = document.getElementById('taskTime').value;
+
+        if (taskName === '' || taskDate === '' || taskTime === '') {
+            alert('Please enter task name, date, and time.');
+            return;
+        }
+
+        var textColor = document.getElementById('taskColor').value;
+        var plannedDateTime = new Date(taskDate + ' ' + taskTime);
+
+        if (plannedDateTime < new Date()) {
+            document.getElementById('warningTaskDate').innerText = 'Please select a future date.';
+            return;
+        }
+
+        var remainingTime = calculateRemainingTime(plannedDateTime);
+        var newTask = {
+            name: taskName,
+            color: textColor,
+            date: taskDate,
+            time: taskTime,
+            remainingTime: remainingTime
+        };
+
+        savedTasks.push(newTask);
+        localStorage.setItem('tasks', JSON.stringify(savedTasks));
+
+        displayTasks();
+
+        document.getElementById('warningTaskDate').innerText = '';
+        document.getElementById('taskName').value = '';
+        document.getElementById('taskDate').value = '';
+        document.getElementById('taskTime').value = '';
+    }
+
+    function deleteItem(btn, listType, index) {
+        // Veriyi localStorage'dan kaldır
+        if (listType === 'notes') {
+            savedNotes.splice(index, 1);
+            localStorage.setItem('notes', JSON.stringify(savedNotes));
+            displayNotes();
+        } else if (listType === 'tasks') {
+            savedTasks.splice(index, 1);
+            localStorage.setItem('tasks', JSON.stringify(savedTasks));
+            displayTasks();
+        }
+    }
+
+    function completeTask(item, index) {
+        // Görevi tamamla ve veriyi güncelle
+        savedTasks[index].completed = !savedTasks[index].completed;
+        localStorage.setItem('tasks', JSON.stringify(savedTasks));
+        displayTasks();
+    }
+
+    function calculateRemainingTime(plannedDateTime) {
+        var currentTime = new Date();
+        var timeDifference = plannedDateTime - currentTime;
+
+        if (timeDifference <= 0) {
+            return 'Task overdue';
+        }
+
+        var days = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+        var hours = Math.floor((timeDifference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        var minutes = Math.floor((timeDifference % (1000 * 60 * 60)) / (1000 * 60));
+
+        return `${days}d ${hours}h ${minutes}m`;
+    }
+
+    function checkKey(event) {
+        if (event.key === "Enter") {
+            addNote();
+        }
+    }
+
+    function updateRemainingTime() {
+        savedTasks.forEach(function (task, index) {
+            var plannedDateTime = new Date(task.date + ' ' + task.time);
+            var remainingTime = calculateRemainingTime(plannedDateTime);
+
+            if (remainingTime !== task.remainingTime) {
+                task.remainingTime = remainingTime;
+                localStorage.setItem('tasks', JSON.stringify(savedTasks));
+                displayTasks();
+            }
+        });
+    }
+
+    function displayNotes() {
+        var noteList = document.getElementById('noteList');
+        noteList.innerHTML = '';
+
+        savedNotes.forEach(function (note, index) {
+            var noteItem = document.createElement('li');
+            noteItem.innerHTML = `<div class="item" style="color: ${note.color};"><span class="symbol">&#128221;</span><span>${note.text}</span><span class="date-time" style="color: black;">${note.date}</span><span class="delete-btn" onclick="deleteItem(this, 'notes', ${index})">✖</span></div>`;
+            noteList.appendChild(noteItem);
+        });
+    }
+
+    function displayTasks() {
+        var taskList = document.getElementById('taskList');
+        taskList.innerHTML = '';
+
+        savedTasks.forEach(function (task, index) {
+            var taskItem = document.createElement('li');
+            var completedClass = task.completed ? 'completed' : '';
+            taskItem.innerHTML = `<div class="item ${completedClass}" style="color: ${task.color};" onclick="completeTask(this, ${index})"><span class="symbol">&#128337;</span><span>${task.name}</span><span class="date-time" style="color: black;">${task.remainingTime}</span><span class="delete-btn" onclick="deleteItem(this, 'tasks', ${index})">✖</span></div>`;
+            taskList.appendChild(taskItem);
+        });
+    }
+</script>
+
+</body>
+</html>
